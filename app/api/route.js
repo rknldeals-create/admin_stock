@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server'; // Needed for proper response handling
+import { NextResponse } from 'next/server'; 
 
 // **IMPORTANT:** These must be set as Vercel Environment Variables
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -7,14 +7,22 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// ----------------------------------------------------------------------
-// Fix 1: The function must be named 'POST' to handle POST requests
-// Fix 2: The request body is accessed via 'request.json()' 
-// Fix 3: Response is created using NextResponse
-// ----------------------------------------------------------------------
+// --- CORS Headers ---
+const corsHeaders = {
+    // This allows requests from ANY origin (required for local Expo testing)
+    'Access-Control-Allow-Origin': '*', 
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+};
+// --------------------
+
+
 export async function POST(request) {
-    
-    // Check if the request body is valid JSON before attempting to parse
+    // 1. Handle preflight CORS request (OPTIONS method)
+    if (request.method === 'OPTIONS') {
+        return NextResponse.json({}, { status: 200, headers: corsHeaders });
+    }
+
     let client_id, license_key;
     try {
         const body = await request.json();
@@ -22,12 +30,12 @@ export async function POST(request) {
         license_key = body.license_key;
     } catch (e) {
         // If the body is unreadable, treat it as a bad request
-        return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
+        return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400, headers: corsHeaders });
     }
     
     // Input Validation
     if (!client_id || !license_key) {
-        return NextResponse.json({ error: 'Missing client_id or license_key.' }, { status: 400 });
+        return NextResponse.json({ error: 'Missing client_id or license_key.' }, { status: 400, headers: corsHeaders });
     }
 
     try {
@@ -40,8 +48,8 @@ export async function POST(request) {
             .single();
 
         if (error) {
-            // No row found or other error: returns 403 (Subscription expired/invalid key)
-            return NextResponse.json({ error: 'Subscription expired or invalid key.' }, { status: 403 });
+            // No row found or other error: returns 403
+            return NextResponse.json({ error: 'Subscription expired or invalid key.' }, { status: 403, headers: corsHeaders });
         }
 
         // Check validity date
@@ -50,18 +58,18 @@ export async function POST(request) {
 
         if (validUntil > now) {
             // ✅ Valid License - Returns 200
-            return NextResponse.json({ status: 'valid', valid_until: data.valid_until }, { status: 200 });
+            return NextResponse.json({ status: 'valid', valid_until: data.valid_until }, { status: 200, headers: corsHeaders });
         } else {
             // ❌ Expired License - Returns 403
-            return NextResponse.json({ status: 'expired', valid_until: data.valid_until }, { status: 403 });
+            return NextResponse.json({ status: 'expired', valid_until: data.valid_until }, { status: 403, headers: corsHeaders });
         }
     } catch (err) {
         console.error('Unexpected Server Error:', err);
-        return NextResponse.json({ error: 'An unexpected server error occurred.' }, { status: 500 });
+        return NextResponse.json({ error: 'An unexpected server error occurred.' }, { status: 500, headers: corsHeaders });
     }
 };
 
 // Optional: Explicitly block other methods (GET, PUT, etc.) if needed
 export async function GET() {
-    return NextResponse.json({ error: 'Method Not Allowed' }, { status: 405 });
+    return NextResponse.json({ error: 'Method Not Allowed' }, { status: 405, headers: corsHeaders });
 }
